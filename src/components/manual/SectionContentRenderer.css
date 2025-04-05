@@ -1,0 +1,22 @@
+.amended-content {
+  position: relative;
+}
+
+.amended-paragraph {
+  position: relative;
+  padding-left: 0.5rem;
+  border-left: 1px solid black;
+  margin-left: 0;
+}
+
+.amended-line {
+  position: relative;
+  padding-left: 0.5rem;
+}
+
+.amended-line::before {
+  content: "│";
+  position: absolute;
+  left: 0;
+  color: black;
+} 
