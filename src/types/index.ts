@@ -1,4 +1,3 @@
-
 export type UserRole = 'general' | 'quality' | 'authority';
 
 export interface User {
@@ -64,6 +63,20 @@ export interface ManualSection {
   order: number;
   level: number;
   parentId?: string;
+  amendment?: {
+    content: string;
+    originalContent: string;
+    status: string;
+  };
+  temporaryRevisions?: {
+    revision_number: string;
+    section_title: string;
+    description: string;
+    date_issued: string;
+    effective_date: string;
+    expiry_date: string;
+    issued_by: string;
+  }[];
 }
 
 export interface Manual {

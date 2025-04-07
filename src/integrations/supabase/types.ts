@@ -91,6 +91,7 @@ export interface Database {
           created_by: string
           created_at: string
           updated_at: string
+          company_id: string
         }
         Insert: {
           id?: string
@@ -100,6 +101,7 @@ export interface Database {
           created_by: string
           created_at?: string
           updated_at?: string
+          company_id: string
         }
         Update: {
           id?: string
@@ -109,6 +111,7 @@ export interface Database {
           created_by?: string
           created_at?: string
           updated_at?: string
+          company_id?: string
         }
         Relationships: []
       }

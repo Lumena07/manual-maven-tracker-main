@@ -30,16 +30,31 @@ export interface ManualSection {
   order: number;
 }
 
+export interface Company {
+  id: string;
+  name: string;
+  logo_url?: string;
+  address?: string;
+  contact_info?: string;
+  created_at: string;
+  updated_at: string;
+}
+
 export interface Manual {
   id: string;
   title: string;
+  company_id: string;
+  company_name?: string;
+  created_at: string;
+  updated_at: string;
   version: string;
   sections: ManualSection[];
 }
 
 export async function uploadManual(
   file: File, 
-  userId: string
+  userId: string,
+  companyId: string
 ): Promise<UploadManualResult> {
   try {
     const manualTitle = file.name.split('.')[0]; // Use filename as title
@@ -51,7 +66,8 @@ export async function uploadManual(
         title: manualTitle,
         description: `Uploaded from ${file.name}`,
         version: '1.0',
-        created_by: userId
+        created_by: userId,
+        company_id: companyId
       })
       .select('id')
       .single();
@@ -400,7 +416,17 @@ export async function getManualById(manualId: string): Promise<Manual | null> {
     // Fetch manual details
     const { data: manualData, error: manualError } = await supabase
       .from('manuals')
-      .select('id, title, version')
+      .select(`
+        id, 
+        title, 
+        version, 
+        company_id, 
+        created_at, 
+        updated_at,
+        company:companies (
+          name
+        )
+      `)
       .eq('id', manualId)
       .single();
     
@@ -457,10 +483,21 @@ export async function getManualById(manualId: string): Promise<Manual | null> {
       };
     });
     
+    // Extract company name safely
+    let companyName = '';
+    if (manualData.company) {
+      const company = manualData.company as { name?: string };
+      companyName = company.name || '';
+    }
+
     return {
       id: manualData.id,
       title: manualData.title,
       version: manualData.version,
+      company_id: manualData.company_id,
+      company_name: companyName,
+      created_at: manualData.created_at,
+      updated_at: manualData.updated_at,
       sections
     };
   } catch (error) {
@@ -473,6 +510,7 @@ export async function getManualById(manualId: string): Promise<Manual | null> {
 export async function importManualFromUrl(
   url: string,
   userId: string,
+  companyId: string,
   title?: string
 ): Promise<UploadManualResult> {
   try {
@@ -489,7 +527,7 @@ export async function importManualFromUrl(
     const file = new File([blob], filename, { type: blob.type });
     
     // Use the existing upload function
-    return await uploadManual(file, userId);
+    return await uploadManual(file, userId, companyId);
   } catch (error) {
     console.error('Error importing manual:', error);
     return { 

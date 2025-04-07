@@ -37,7 +37,7 @@ interface Section {
   amendment?: {
     id: string;
     content: string;
-    original_content: string;
+    originalContent: string;
     status: string;
   };
   temporaryRevision?: {
@@ -431,7 +431,7 @@ export function ManualViewer({ manualId }: ManualViewerProps) {
           amendment: amendment ? {
             id: amendment.id,
             content: amendment.content,
-            original_content: amendment.original_content,
+            originalContent: amendment.original_content,
             status: amendment.status
           } : undefined,
           temporaryRevision: temporaryRevision ? {
@@ -646,7 +646,7 @@ export function ManualViewer({ manualId }: ManualViewerProps) {
                               selectedSection.amendment.content,
                               sectionNumbers[selectedSection.id] || ''
                             )} 
-                            originalContent={selectedSection.amendment.original_content}
+                            originalContent={selectedSection.amendment.originalContent}
                             isAmended={true}
                           />
                         </div>
@@ -682,7 +682,7 @@ export function ManualViewer({ manualId }: ManualViewerProps) {
         </TabsContent>
 
         <TabsContent value="print">
-          <ManualPrinter manualId={id!} />
+          <ManualPrinter manualId={manualId} sectionNumber={selectedSection ? sectionNumbers[selectedSection.id] || '' : ''} />
         </TabsContent>
       </Tabs>
     </div>
