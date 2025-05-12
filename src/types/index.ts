@@ -1,11 +1,13 @@
-export type UserRole = 'general' | 'quality' | 'authority';
+export type UserRole = 'general' | 'quality' | 'authority' | 'admin';
 
 export interface User {
   id: string;
   name: string;
   email: string;
   role: UserRole;
-  avatar?: string;
+  avatar?: string | null;
+  created_at: string;
+  updated_at: string;
 }
 
 export type AmendmentStatus = 'pending' | 'quality' | 'approved' | 'rejected';

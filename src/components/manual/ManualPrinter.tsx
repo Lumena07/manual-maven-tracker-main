@@ -13,6 +13,7 @@ import ReactDOMServer from 'react-dom/server';
 import { SectionContentRenderer } from './SectionContentRenderer';
 // @ts-ignore
 import htmlToPdfmake from 'html-to-pdfmake';
+import { getUsersByIds } from '@/services/userService';
 
 interface ManualPrinterProps {
   manualId: string;
@@ -302,6 +303,7 @@ export function ManualPrinter({ manualId, sectionNumber = '' }: ManualPrinterPro
     logoUrl: null
   });
   const [sectionNumbers, setSectionNumbers] = useState<{ [key: string]: string }>({});
+  const [userMap, setUserMap] = useState<Map<string, string>>(new Map());
 
   useEffect(() => {
     fetchData();
@@ -385,6 +387,18 @@ export function ManualPrinter({ manualId, sectionNumber = '' }: ManualPrinterPro
           }));
         }
       }
+
+      // Build user map for all issued_by and inserted_by
+      const userIds = [
+        ...new Set([
+          ...tempRevisions.map(r => r.issued_by),
+          ...finalRevisionsData.map(r => r.inserted_by)
+        ])
+      ];
+      const users = await getUsersByIds(userIds);
+      const userMapLocal = new Map();
+      users.forEach(user => userMapLocal.set(user.id, user.name));
+      setUserMap(userMapLocal);
     } catch (error) {
       console.error('Error fetching data:', error);
       toast.error('Failed to load manual data');
@@ -750,7 +764,7 @@ export function ManualPrinter({ manualId, sectionNumber = '' }: ManualPrinterPro
                   { text: new Date(revision.date_issued).toLocaleDateString(), style: 'tableCell' },
                   { text: new Date(revision.effective_date).toLocaleDateString(), style: 'tableCell' },
                   { text: new Date(revision.expiry_date).toLocaleDateString(), style: 'tableCell' },
-                  { text: revision.issued_by || '', style: 'tableCell' }
+                  { text: userMap.get(revision.issued_by) || 'Unknown User', style: 'tableCell' }
                 ];
               })
             ]
@@ -800,7 +814,7 @@ export function ManualPrinter({ manualId, sectionNumber = '' }: ManualPrinterPro
                 { text: revision.affected_pages || '', style: 'tableCell' },
                 { text: revision.reason || '', style: 'tableCell' },
                 { text: new Date(revision.date_inserted).toLocaleDateString(), style: 'tableCell' },
-                { text: revision.inserted_by || '', style: 'tableCell' }
+                { text: userMap.get(revision.inserted_by) || 'Unknown User', style: 'tableCell' }
               ])
             ]
           },

@@ -12,6 +12,8 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { ArrowLeft } from 'lucide-react';
 import { toast } from 'sonner';
+import { getUsersByIds } from '@/services/userService';
+import { User } from '@/types';
 
 // Types for our data
 type ManualSection = {
@@ -46,18 +48,20 @@ type TempRevision = {
 type FinalRevision = {
   id: string;
   manual_id: string;
-  revision_number: string;
-  description: string;
-  date_issued: string;
-  effective_date: string;
-  created_by: string;
-  created_at: string;
+  revision_no: string;
+  revision_date: string;
+  affected_pages: string;
+  reason: string;
+  date_inserted: string;
+  inserted_by: string;
+  issue_no: string;
 };
 
 const Manual = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('content');
+  const [userMap, setUserMap] = useState<Map<string, User>>(new Map());
   
   const [manual, setManual] = useState<{
     id: string;
@@ -148,6 +152,23 @@ const Manual = () => {
           .order('revision_date', { ascending: false });
           
         if (finalRevError) throw finalRevError;
+
+        // Collect all user IDs
+        const userIds = new Set<string>();
+        if (manualData.created_by) userIds.add(manualData.created_by);
+        amendmentData?.forEach(amend => {
+          if (amend.created_by) userIds.add(amend.created_by);
+        });
+        tempRevData?.forEach(rev => {
+          if (rev.issued_by) userIds.add(rev.issued_by);
+        });
+        finalRevData?.forEach(rev => {
+          if (rev.inserted_by) userIds.add(rev.inserted_by);
+        });
+
+        // Fetch user information
+        const users = await getUsersByIds([...userIds]);
+        setUserMap(users);
         
         // Transform section data
         const formattedSections = sectionData?.map(section => ({
@@ -183,26 +204,27 @@ const Manual = () => {
           dateIssued: rev.date_issued,
           effectiveDate: rev.effective_date,
           expiryDate: rev.expiry_date,
-          issuedBy: rev.issued_by
+          issuedBy: userMap.get(rev.issued_by)?.name || 'Unknown User'
         })) || [];
         
         // Transform final revisions data
         const formattedFinalRevs = finalRevData?.map(rev => ({
           id: rev.id,
           manual_id: rev.manual_id,
-          revision_number: rev.revision_number,
-          description: rev.description,
-          date_issued: rev.date_issued,
-          effective_date: rev.effective_date,
-          created_by: rev.created_by,
-          created_at: rev.created_at
+          revision_no: rev.revision_no,
+          revision_date: rev.revision_date,
+          affected_pages: rev.affected_pages,
+          reason: rev.reason,
+          date_inserted: rev.date_inserted,
+          inserted_by: userMap.get(rev.inserted_by)?.name || 'Unknown User',
+          issue_no: rev.issue_no
         })) || [];
         
         setManual({
           id: manualData.id,
           title: manualData.title,
           description: manualData.description,
-          created_by: manualData.created_by,
+          created_by: userMap.get(manualData.created_by)?.name || 'Unknown User',
           created_at: manualData.created_at,
           updated_at: manualData.updated_at,
           sections: formattedSections

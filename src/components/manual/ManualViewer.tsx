@@ -17,6 +17,8 @@ import { Label } from '@/components/ui/label';
 import { proposeAmendment } from '@/services/manualService';
 import { SectionContentRenderer } from './SectionContentRenderer';
 import { ManualPrinter } from './ManualPrinter';
+import { getUsersByIds } from '@/services/userService';
+import { User } from '@/types';
 
 interface ManualViewerProps {
   manualId: string;
@@ -111,6 +113,7 @@ export function ManualViewer({ manualId }: ManualViewerProps) {
   const [temporaryRevisions, setTemporaryRevisions] = useState<TemporaryRevision[]>([]);
   const [finalRevisions, setFinalRevisions] = useState<any[]>([]);
   const [sectionNumbers, setSectionNumbers] = useState<{ [key: string]: string }>({});
+  const [userMap, setUserMap] = useState<Map<string, User>>(new Map());
 
   useEffect(() => {
     fetchManual();
@@ -334,25 +337,23 @@ export function ManualViewer({ manualId }: ManualViewerProps) {
               </tr>
             </thead>
             <tbody>
-              {finalRevisions.length > 0 ? (
-                finalRevisions.map((revision) => (
-                  <tr key={revision.id} className="hover:bg-gray-50">
-                    <td className="border border-gray-300 p-2">{revision.issue_no}</td>
-                    <td className="border border-gray-300 p-2">{revision.revision_no}</td>
-                    <td className="border border-gray-300 p-2">{new Date(revision.revision_date).toLocaleDateString()}</td>
-                    <td className="border border-gray-300 p-2">{revision.affected_pages}</td>
-                    <td className="border border-gray-300 p-2">{revision.reason}</td>
-                    <td className="border border-gray-300 p-2">{new Date(revision.date_inserted).toLocaleDateString()}</td>
-                    <td className="border border-gray-300 p-2">{revision.inserted_by}</td>
-                  </tr>
-                ))
-              ) : (
-                <tr>
-                  <td colSpan={7} className="border border-gray-300 p-2 text-center text-gray-500">
-                    No revisions recorded
+              {finalRevisions.map((revision) => (
+                <tr key={revision.id}>
+                  <td className="border border-gray-300 p-2">{revision.issue_no}</td>
+                  <td className="border border-gray-300 p-2">{revision.revision_no}</td>
+                  <td className="border border-gray-300 p-2">
+                    {new Date(revision.revision_date).toLocaleDateString()}
+                  </td>
+                  <td className="border border-gray-300 p-2">{revision.affected_pages}</td>
+                  <td className="border border-gray-300 p-2">{revision.reason}</td>
+                  <td className="border border-gray-300 p-2">
+                    {new Date(revision.date_inserted).toLocaleDateString()}
+                  </td>
+                  <td className="border border-gray-300 p-2">
+                    {userMap.get(revision.inserted_by)?.name || 'Unknown User'}
                   </td>
                 </tr>
-              )}
+              ))}
             </tbody>
           </table>
         </div>
@@ -363,63 +364,67 @@ export function ManualViewer({ manualId }: ManualViewerProps) {
   const fetchManual = async () => {
     try {
       setLoading(true);
-      const { data: manualData, error: manualError } = await supabase
-        .from('manuals')
-        .select('*')
-        .eq('id', id)
-        .single();
+      const [manualData, sectionsData, amendmentsData, tempRevisions, finalRevisionsData] = await Promise.all([
+        supabase
+          .from('manuals')
+          .select('*')
+          .eq('id', id)
+          .single(),
+        supabase
+          .from('manual_sections')
+          .select('id, manual_id, title, content, order, level, parent_id, created_at, updated_at')
+          .eq('manual_id', id)
+          .order('order', { ascending: true }),
+        supabase
+          .from('amendments')
+          .select('id, section_id, content, original_content, status')
+          .eq('manual_id', id),
+        supabase
+          .from('temporary_revisions')
+          .select('id, section_id, revision_number, description, date_issued, effective_date, expiry_date, issued_by')
+          .eq('manual_id', id),
+        supabase
+          .from('final_revisions')
+          .select('*')
+          .eq('manual_id', id)
+          .order('revision_no', { ascending: false })
+      ]);
 
-      if (manualError) throw manualError;
+      if (manualData.error) throw manualData.error;
+      if (sectionsData.error) throw sectionsData.error;
+      if (amendmentsData.error) throw amendmentsData.error;
+      if (tempRevisions.error) throw tempRevisions.error;
+      if (finalRevisionsData.error) throw finalRevisionsData.error;
 
-      const { data: sectionsData, error: sectionsError } = await supabase
-        .from('manual_sections')
-        .select('id, manual_id, title, content, order, level, parent_id, created_at, updated_at')
-        .eq('manual_id', id)
-        .order('order', { ascending: true });
+      // Collect all user IDs
+      const userIds = new Set<string>();
+      if (manualData.data?.created_by) userIds.add(manualData.data.created_by);
+      finalRevisionsData.data?.forEach(rev => {
+        if (rev.created_by) userIds.add(rev.created_by);
+      });
+      tempRevisions.data?.forEach(rev => {
+        if (rev.issued_by) userIds.add(rev.issued_by);
+      });
 
-      if (sectionsError) throw sectionsError;
-      if (!sectionsData) throw new Error('No sections found');
+      // Fetch user information
+      const users = await getUsersByIds([...userIds]);
+      setUserMap(users);
 
-      const typedSections = sectionsData as unknown as DBSection[];
+      const typedSections = sectionsData.data as unknown as DBSection[];
 
-      // Fetch amendments for the manual instead of by section IDs
-      const { data: amendmentsData, error: amendmentsError } = await supabase
-        .from('amendments')
-        .select('id, section_id, content, original_content, status')
-        .eq('manual_id', id);
-
-      if (amendmentsError) throw amendmentsError;
-
-      // Fetch temporary revisions for the manual instead of by section IDs
-      const { data: tempRevisions, error: revisionsError } = await supabase
-        .from('temporary_revisions')
-        .select('id, section_id, revision_number, description, date_issued, effective_date, expiry_date, issued_by')
-        .eq('manual_id', id);
-
-      if (revisionsError) throw revisionsError;
-      
       // Store temporary revisions in state
-      setTemporaryRevisions(tempRevisions || []);
+      setTemporaryRevisions(tempRevisions.data || []);
 
-      // Fetch final revisions for this manual
-      const { data: finalRevisionsData, error: finalRevisionsError } = await supabase
-        .from('final_revisions')
-        .select('*')
-        .eq('manual_id', id)
-        .order('revision_no', { ascending: false });
-
-      if (finalRevisionsError) throw finalRevisionsError;
-      
       // Store final revisions in state
-      setFinalRevisions(finalRevisionsData || []);
+      setFinalRevisions(finalRevisionsData.data || []);
 
       // Build hierarchical structure
       const sectionsMap = new Map<string, Section>();
       const rootSections: Section[] = [];
 
       typedSections.forEach(section => {
-        const amendment = amendmentsData?.find(a => a.section_id === section.id);
-        const temporaryRevision = tempRevisions?.find(rev => rev.section_id === section.id);
+        const amendment = amendmentsData.data?.find(a => a.section_id === section.id);
+        const temporaryRevision = tempRevisions.data?.find(rev => rev.section_id === section.id);
         
         // Only show temporary revision indicator if the amendment is not approved
         const hasTemporaryRevision = !!temporaryRevision && 
@@ -459,12 +464,12 @@ export function ManualViewer({ manualId }: ManualViewerProps) {
       });
 
       setManual({
-        ...manualData,
+        ...manualData.data,
         sections: rootSections
       });
     } catch (error) {
       console.error('Error fetching manual:', error);
-      toast.error('Failed to load manual');
+      toast.error('Failed to load manual data');
     } finally {
       setLoading(false);
     }
@@ -630,7 +635,7 @@ export function ManualViewer({ manualId }: ManualViewerProps) {
                                     <td className="border border-gray-300 p-1">{new Date(revision.date_issued).toLocaleDateString()}</td>
                                     <td className="border border-gray-300 p-1">{new Date(revision.effective_date).toLocaleDateString()}</td>
                                     <td className="border border-gray-300 p-1">{new Date(revision.expiry_date).toLocaleDateString()}</td>
-                                    <td className="border border-gray-300 p-1">{revision.issued_by}</td>
+                                    <td className="border border-gray-300 p-1">{userMap.get(revision.issued_by)?.name || 'Unknown User'}</td>
                                   </tr>
                                 );
                               })}

@@ -8,6 +8,8 @@ import { toast } from 'sonner';
 import { Check, X, Eye } from 'lucide-react';
 import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { diffWords } from 'diff';
+import { getUsersByIds, getUserById } from '@/services/userService';
+import { User } from '@/types';
 
 interface Amendment {
   id: string;
@@ -62,10 +64,22 @@ export function AmendmentManager({ manualId, onAmendmentStatusChange }: Amendmen
   const [loading, setLoading] = useState(true);
   const [selectedAmendment, setSelectedAmendment] = useState<Amendment | null>(null);
   const [rejectionReason, setRejectionReason] = useState('');
+  const [userMap, setUserMap] = useState<Map<string, User>>(new Map());
+  const [currentProfile, setCurrentProfile] = useState<User | null>(null);
 
   useEffect(() => {
     fetchAmendments();
   }, [manualId]);
+
+  useEffect(() => {
+    const fetchProfile = async () => {
+      if (user?.id) {
+        const profile = await getUserById(user.id);
+        setCurrentProfile(profile);
+      }
+    };
+    fetchProfile();
+  }, [user?.id]);
 
   const fetchAmendments = async () => {
     try {
@@ -94,6 +108,11 @@ export function AmendmentManager({ manualId, onAmendmentStatusChange }: Amendmen
       })) || [];
 
       setAmendments(transformedData);
+
+      // Fetch user information for all unique created_by IDs
+      const userIds = [...new Set(transformedData.map(a => a.created_by))];
+      const users = await getUsersByIds(userIds);
+      setUserMap(users);
     } catch (error) {
       console.error('Error fetching amendments:', error);
       toast.error('Failed to load amendments');
@@ -235,7 +254,7 @@ export function AmendmentManager({ manualId, onAmendmentStatusChange }: Amendmen
                   <TableCell>
                     <AmendmentStatus status={amendment.status} />
                   </TableCell>
-                  <TableCell>{amendment.created_by}</TableCell>
+                  <TableCell>{userMap.get(amendment.created_by)?.name || 'Unknown User'}</TableCell>
                   <TableCell>
                     {new Date(amendment.created_at).toLocaleDateString()}
                   </TableCell>
@@ -248,7 +267,7 @@ export function AmendmentManager({ manualId, onAmendmentStatusChange }: Amendmen
                       >
                         <Eye className="h-4 w-4" />
                       </Button>
-                                       </div>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -313,7 +332,7 @@ export function AmendmentManager({ manualId, onAmendmentStatusChange }: Amendmen
               >
                 Cancel
               </Button>
-              {selectedAmendment?.status === 'pending' && (
+              {selectedAmendment?.status === 'pending' && currentProfile?.role !== 'general' && (
                 <>
                   <Button
                     variant="destructive"
@@ -328,7 +347,7 @@ export function AmendmentManager({ manualId, onAmendmentStatusChange }: Amendmen
                   </Button>
                 </>
               )}
-              {selectedAmendment?.status === 'rejected' && (
+              {selectedAmendment?.status === 'rejected' && currentProfile?.role !== 'general' && (
                 <Button
                   variant="destructive"
                   onClick={() => handleReject(selectedAmendment)}

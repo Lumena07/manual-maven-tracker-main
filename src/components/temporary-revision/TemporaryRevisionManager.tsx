@@ -2,6 +2,8 @@ import { useState, useEffect } from 'react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { getUsersByIds } from '@/services/userService';
+import { User } from '@/types';
 
 interface TemporaryRevision {
   id: string;
@@ -22,6 +24,7 @@ interface TemporaryRevisionManagerProps {
 export function TemporaryRevisionManager({ manualId }: TemporaryRevisionManagerProps) {
   const [revisions, setRevisions] = useState<TemporaryRevision[]>([]);
   const [loading, setLoading] = useState(true);
+  const [userMap, setUserMap] = useState<Map<string, User>>(new Map());
 
   useEffect(() => {
     fetchRevisions();
@@ -49,6 +52,11 @@ export function TemporaryRevisionManager({ manualId }: TemporaryRevisionManagerP
       })) || [];
 
       setRevisions(transformedData);
+
+      // Fetch user profiles for all unique issued_by IDs
+      const userIds = [...new Set(transformedData.map(r => r.issued_by))];
+      const users = await getUsersByIds(userIds);
+      setUserMap(users);
     } catch (error) {
       console.error('Error fetching temporary revisions:', error);
       toast.error('Failed to load temporary revisions');
@@ -96,7 +104,7 @@ export function TemporaryRevisionManager({ manualId }: TemporaryRevisionManagerP
                   <TableCell>{new Date(revision.date_issued).toLocaleDateString()}</TableCell>
                   <TableCell>{new Date(revision.effective_date).toLocaleDateString()}</TableCell>
                   <TableCell>{new Date(revision.expiry_date).toLocaleDateString()}</TableCell>
-                  <TableCell>{revision.issued_by}</TableCell>
+                  <TableCell>{userMap.get(revision.issued_by)?.name || 'Unknown User'}</TableCell>
                 </TableRow>
               ))}
             </TableBody>
